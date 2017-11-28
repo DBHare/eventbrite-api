@@ -50,7 +50,7 @@ class Eventbrite_Query extends WP_Query {
 	protected function process_query_args( $query ) {
 		// Handle requests for paged events.
 		$paged = get_query_var( 'paged' );
-		if ( 2 <= $paged ) {
+		if ( 2 <= $paged && empty( $query['paged'] ) ) {
 			$query['paged'] = $paged;
 		}
 
@@ -112,14 +112,40 @@ class Eventbrite_Query extends WP_Query {
 			$this->api_results = eventbrite()->get_event( $this->query_vars['p'] );
 		}
 
-		// If private events are wanted, the user_owned_events endpoint must be used.
-		elseif ( isset( $this->query_vars['display_private'] ) && true === $this->query_vars['display_private'] ) {
-			$this->api_results = eventbrite()->get_user_owned_events( $params );
+		//Compensate for the single post queries where the p value is missing
+		elseif ( empty( $this->query['p'] ) && isset( $this->query['p'] ) && is_single() ) {
+			
 		}
 
-		// It's a run-of-the-mill query (only the user's public live events), meaning event_search is best.
+		// If private events are wanted, the events endpoint must be used.
+		elseif ( ! empty( $this->query_vars['display_private'] ) || eventbrite_get_setting( 'show_private_events' ) ) {
+			$this->api_results = eventbrite()->get_user_events( $params );
+		}
+
+		// If no organizer_id was given then show the events for the current user
+		elseif ( empty( $this->query_vars['organizer_id'] ) ) {
+			$this->api_results = eventbrite()->get_user_events( $params );
+		}
+
+		// It's a run-of-the-mill query (only the user's public live events)
 		else {
 			$this->api_results = eventbrite()->do_event_search( $params );
+		}
+
+		// Save the used parameters
+		$this->params = $params;
+
+		// Set the default variables if no results
+		if( !is_wp_error( $this->api_results ) && empty( $this->api_results ) ){
+			$this->api_results = (object)array(
+				'events' => array(),
+				'pagination' => (object) array(
+					'object_count' => 0,
+					'page_number'  => 1,
+					'page_size'    => 0,
+					'page_count'   => 1,
+				),
+			);
 		}
 
 		// Do any post-API query processing.
@@ -150,22 +176,40 @@ class Eventbrite_Query extends WP_Query {
 			$params['page'] = ceil( $this->query_vars['paged'] / 5 );
 		}
 
-		// We need the Eventbrite user ID (or an organizer) if we're getting only public events.
-		if ( ! isset( $this->query_vars['display_private'] ) || true !== $this->query_vars['display_private'] ) {
-			// Set sorting.
-			$params['sort_by'] = 'date';
-
-			// Set the user ID if we don't have a specified organizer.
-			if ( ! empty( $this->query_vars['organizer_id'] ) ) {
-				$params['organizer.id'] = (int) $this->query_vars['organizer_id'];
-			} else {
-				$params['user.id'] = Eventbrite_API::$instance->eventbrite_external_id;
-			}
+		// set the order
+		if( empty( $this->query_vars['order_by'] ) ){
+			$params['order_by'] = 'start_asc';
+		}else{
+			$params['order_by'] = $this->query_vars['order_by'];
 		}
 
-		// Adjust status for private events if necessary.
-		if ( isset( $this->query_vars['display_private'] ) && true === $this->query_vars['display_private'] && ! empty( $this->query_vars['status'] ) ) {
+		// set the status
+		if( !empty( $this->query_vars['status'] ) ){
 			$params['status'] = $this->query_vars['status'];
+		}
+
+		// Set the these variables only if the organizer_id is specified
+		if( ! empty( $this->query_vars['organizer_id'] ) ){
+			$params['organizer_id'] = (int) $this->query_vars['organizer_id'];
+
+			if( empty( $this->query_vars['start_date'] ) ){
+				if( empty( $params['status'] ) || $params['status'] == 'live' ){
+					$params['start_date.range_start'] = date( "Y-m-d\T00:00:00" );
+				}
+			}else{
+				$params['start_date.range_start'] = date( "Y-m-d\T00:00:00", strtotime( $this->query_vars['start_date'] ) );
+			}
+
+			if( ! empty( $this->query_vars['end_date'] ) ){
+				$params['start_date.range_end'] = date( "Y-m-d\T00:00:00", strtotime( $this->query_vars['end_date'] ) );
+			}
+
+			// Adjust status for private events if necessary.
+			if ( ! empty( $this->query_vars['display_private'] ) || eventbrite_get_setting( 'show_private_events' ) ) {
+				$params['only_public'] = false;
+			}else{
+				$params['only_public'] = true;
+			}
 		}
 
 		return $params;
@@ -193,7 +237,11 @@ class Eventbrite_Query extends WP_Query {
 			else {
 				$modulus = ( 2 <= $this->query_vars['paged'] && 0 == $this->query_vars['paged'] % 5 ) ? 5 : $this->query_vars['paged'] % 5;
 				$offset = ( 2 <= $modulus && 5 >= $modulus ) ? ( $modulus - 1 ) * 10 : 0;
-				$this->posts = array_slice( $this->api_results->events, $offset, 10 );
+				$max_offset = 10;
+				if( !empty( $this->query_vars['limit'] ) ){
+					$max_offset = $this->query_vars['limit'];
+				}
+				$this->posts = array_slice( $this->api_results->events, $offset, $max_offset );
 				$posts_per_page = 10;
 			}
 
@@ -259,10 +307,12 @@ class Eventbrite_Query extends WP_Query {
 	 * @access protected
 	 */
 	protected function post_api_filters() {
-		// Do nothing if API results were empty, false, or an error.
-		if ( empty( $this->api_results ) || is_wp_error( $this->api_results ) ) {
+		// Do nothing if an error.
+		if (is_wp_error( $this->api_results ) ) {
 			return false;
 		}
+
+		$this->api_results = apply_filters( 'eventbrite_query_post_api_filters_before', $this->api_results, $this );
 
 		// Filter out specified IDs: 'post__not_in'
 		if ( isset( $this->query_vars['post__not_in'] ) && is_array( $this->query_vars['post__not_in'] ) ) {
@@ -298,6 +348,17 @@ class Eventbrite_Query extends WP_Query {
 		if ( isset( $this->query_vars['limit'] ) && is_integer( $this->query_vars['limit'] ) ) {
 			$this->api_results->events = array_slice( $this->api_results->events, 0, absint( $this->query_vars['limit'] ) );
 		}
+
+		// Remove private events
+		if ( empty( $this->query_vars['display_private'] ) && ! eventbrite_get_setting( 'show_private_events' ) ) {
+			$this->api_results->events = array_filter( $this->api_results->events, array( $this, 'filter_public' ) );
+		}
+
+		// Add filters support
+		$this->api_results = apply_filters( 'eventbrite_query_post_api_filters_after', $this->api_results, $this );
+
+		// Save results count after filters are applied
+		$this->api_results->pagination->object_count = count( $this->api_results->events );
 	}
 
 	/**
@@ -359,6 +420,18 @@ class Eventbrite_Query extends WP_Query {
 	 */
 	protected function filter_by_subcategory( $event ) {
 		return ( isset( $event->subcategory->id ) ) ? $event->subcategory->id == $this->query_vars['subcategory_id'] : false;
+	}
+
+	/**
+	 * Filter to show only public events
+	 *
+	 * @access protected
+	 *
+	 * @param  object $event A single event from the API call results.
+	 * @return bool True if properties match, false otherwise.
+	 */
+	protected function filter_public( $event ) {
+		return ! empty( $event->public );
 	}
 
 	/**
@@ -490,7 +563,10 @@ class Eventbrite_Query extends WP_Query {
 
 			// If the event has an organizer set, append it to the URL. http://(page permalink)/organizer/(organizer name)-(organizer ID)/
 			if ( ! empty( eventbrite_event_organizer()->name ) ) {
-				$url .= 'organizer/' . sanitize_title( eventbrite_event_organizer()->name ) . '-' . absint( eventbrite_event_organizer()->id );
+				$url .= 'organizer/' . sanitize_title( eventbrite_event_organizer()->name );
+				if( !empty( eventbrite_event_organizer()->id ) ){
+					$url .= '-' . absint( eventbrite_event_organizer()->id );
+				}
 			}
 		}
 

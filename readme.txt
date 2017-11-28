@@ -72,7 +72,7 @@ Assuming your theme is based on [Underscores](http://underscores.me/), most of t
 
 The following endpoints are currently supported, with more on the way. Open an issue on GitHub to request support for others.
 
-* `user_owned_events`: [Eventbrite documentation](http://developer.eventbrite.com/docs/user-owned-events/).
+* `user_events`: [Eventbrite documentation](https://www.eventbrite.com/developer/v3/endpoints/users/#ebapi-get-users-id-events).
 * `event_details`: [Eventbrite documentation](http://developer.eventbrite.com/docs/event-details/).
 * `event_search`: [Eventbrite documentation](http://developer.eventbrite.com/docs/event-search/).
 

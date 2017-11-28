@@ -15,8 +15,10 @@ get_header(); ?>
 					while ( $event->have_posts() ) : $event->the_post(); ?>
 
 						<article id="event-<?php the_ID(); ?>" <?php post_class(); ?>>
-							<header class="entry-header">
+							<div class="post-thumbnail">
 								<?php the_post_thumbnail(); ?>
+							</div>
+							<header class="entry-header">
 
 								<h1 class="entry-title"><?php the_title(); ?></h1>
 

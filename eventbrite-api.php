@@ -26,6 +26,9 @@ function eventbrite_check_existing_token() {
 	if ( ! empty( $tokens[0] ) ) {
 		update_option( 'eventbrite_api_token', $tokens[0]->unique_id );
 	}
+
+	// mark activation
+	update_option( 'eventbrite_api_plugin_actived', true );
 }
 register_activation_hook( __FILE__, 'eventbrite_check_existing_token' );
 
@@ -46,11 +49,24 @@ function eventbrite_api_init() {
 
 	// No point loading unless we have an active Eventbrite connection.
 	if ( Eventbrite_Requirements::has_active_connection() ) {
+		require_once( 'inc/functions.php' );
 		require_once( 'inc/class-eventbrite-manager.php' );
 		require_once( 'inc/class-eventbrite-query.php' );
 		require_once( 'inc/class-eventbrite-templates.php' );
 		require_once( 'inc/class-eventbrite-event.php' );
-		require_once( 'inc/functions.php' );
+		require_once( 'inc/class-eventbrite-calendar.php' );
+		require_once( 'inc/class-eventbrite-custom-events.php' );
+		require_once( 'inc/class-eventbrite-webhook.php' );
+
+		if( is_admin() ){
+			require_once( 'inc/class-eventbrite-admin.php' );
+		}
+
+		// remove activation mark
+		update_option( 'eventbrite_api_plugin_actived', false );
+
+		// Remove webhook on plugin deactivation
+		register_deactivation_hook( __FILE__, array( new Eventbrite_Webhook(), 'remove_webhook' ) );
 	}
 }
 add_action( 'init', 'eventbrite_api_init' );

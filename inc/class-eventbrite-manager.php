@@ -156,31 +156,31 @@ class Eventbrite_Manager {
 		return $results;
 	}
 
-	/**
-	 * Get user-owned private and public events.
-	 *
-	 * @access public
-	 *
-	 * @param array $params Parameters to be passed during the API call.
-	 * @param bool $force Force a fresh API call, ignoring any existing transient.
-	 * @return object Eventbrite_Manager
-	 */
-	public function get_user_owned_events( $params = array(), $force = false ) {
-		// Query for 'live' events by default (rather than 'all', which includes events in the past).
-		if ( ! isset( $params['status'] ) ) {
-			$params['status'] = 'live';
-		}
-
-		// Get the raw results.
-		$results = $this->request( 'user_owned_events', $params, false, $force );
-
-		// If we have events, map them to the format expected by Eventbrite_Event
-		if ( ! empty( $results->events ) ) {
-			$results->events = array_map( array( $this, 'map_event_keys' ), $results->events );
-		}
-
-		return $results;
-	}
+ 	/**
+ 	 * Get user-owned private and public events.
+ 	 *
+ 	 * @access public
+ 	 *
+ 	 * @param array $params Parameters to be passed during the API call.
+ 	 * @param bool $force Force a fresh API call, ignoring any existing transient.
+ 	 * @return object Eventbrite_Manager
+ 	 */
+ 	public function get_user_events( $params = array(), $force = false ) {
+ 		// Query for 'live' events by default (rather than 'all', which includes events in the past).
+ 		if ( ! isset( $params['status'] ) ) {
+ 			$params['status'] = 'live';
+ 		}
+ 
+ 		// Get the raw results.
+ 		$results = $this->request( 'user_events', $params, false, $force );
+ 
+ 		// If we have events, map them to the format expected by Eventbrite_Event
+ 		if ( ! empty( $results->events ) ) {
+ 			$results->events = array_map( array( $this, 'map_event_keys' ), $results->events );
+ 		}
+ 
+ 		return $results;
+ 	}
 
 	/**
 	 * Get a single event by ID.
@@ -257,61 +257,28 @@ class Eventbrite_Manager {
 	 */
 	protected function get_endpoint_params() {
 		$params = array(
-			// http://developer.eventbrite.com/docs/event-search/
+			// https://www.eventbrite.com/developer/v3/endpoints/organizers/
 			'event_search' => array(
-				'q'                         => array(),
-				'since_id'                  => array(),
-				'sort_by'                   => array(
-					'id',
-					'date',
-					'name',
-					'city',
+				'organizer_id' => array(),
+				'status' => array(
+					'all',
+					'canceled',
+					'draft',
+					'ended',
+					'live',
+					'started',
 				),
-				'popular'                   => array(
+				'order_by' => array(
+					'start_asc',
+					'start_desc',
+					'created_asc',
+					'created_desc',
+				),
+				'start_date.range_start' => array(),
+				'start_date.range_end' => array(),
+				'only_public' => array(
 					true,
-					false,
-				),
-				'location.address'          => array(),
-				'location.latitude'         => array(),
-				'location.longitude'        => array(),
-				'location.within'           => array(),
-				'venue.city'                => array(),
-				'venue.region'              => array(),
-				'venue.country'             => array(),
-				'organizer.id'              => array(),
-				'user.id'                   => array(),
-				'tracking_code'             => array(),
-				'categories'                => array(),
-				'formats'                   => array(),
-				'start_date.range_start'    => array(),
-				'start_date.range_end'      => array(),
-				'start_date.keyword'        => array(
-					'today',
-					'tomorrow',
-					'this_week',
-					'this_weekend',
-					'next_week',
-					'this_month',
-				),
-				'date_created.range_start'  => array(),
-				'date_created.range_end'    => array(),
-				'date_created.keyword'      => array(
-					'today',
-					'tomorrow',
-					'this_week',
-					'this_weekend',
-					'next_week',
-					'this_month',
-				),
-				'date_modified.range_start' => array(),
-				'date_modified.range_end'   => array(),
-				'date_modified.keyword'     => array(
-					'today',
-					'tomorrow',
-					'this_week',
-					'this_weekend',
-					'next_week',
-					'this_month',
+					false
 				),
 			),
 			// http://developer.eventbrite.com/docs/event-details/
@@ -320,10 +287,10 @@ class Eventbrite_Manager {
 				'p' => array(),
 			),
 			// http://developer.eventbrite.com/docs/user-owned-events/
-			'user_owned_events' => array(
+			'user_events' => array(
 				'status'   => array(
 					'all',
-					'cancelled',
+					'canceled',
 					'draft',
 					'ended',
 					'live',
@@ -336,6 +303,16 @@ class Eventbrite_Manager {
 					'created_desc',
 				),
 			),
+			// https://www.eventbrite.com/developer/v3/endpoints/webhooks/
+			'get_webhooks' => array(),
+			'create_webhook' => array(
+				'endpoint_url' => array(),
+				'actions' => array(),
+				'event_id' => array()
+			),
+			'remove_webhook' => array(
+				'id' => array()
+			)
 		);
 
 		return $params;
@@ -401,12 +378,25 @@ class Eventbrite_Manager {
 	 * @param string $service The Keyring service that has lost its connection.
 	 * @param string $request The Keyring action that's been called ("delete", not used).
 	 */
-	public function flush_transients( $service, $request ) {
+	public static function flush_transients( $service, $request ) {
 		// Bail if it wasn't an Eventbrite connection that got deleted.
 		if ( 'eventbrite' != $service ) {
 			return;
 		}
 
+		// delete all transients
+		$this->delete_transients();
+
+		// Reset the list of registered transients.
+		delete_option( 'eventbrite_api_transients' );
+	}
+
+	/**
+	 * Delete all transients.
+	 *
+	 * @access public
+	 */
+	public function delete_transients() {
 		// Get the list of registered transients.
 		$transients = get_option( 'eventbrite_api_transients', array() );
 
@@ -419,9 +409,6 @@ class Eventbrite_Manager {
 		foreach ($transients as $transient ) {
 			delete_transient( $transient );
 		}
-
-		// Reset the list of registered transients.
-		delete_option( 'eventbrite_api_transients' );
 	}
 
 	/**

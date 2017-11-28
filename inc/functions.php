@@ -9,12 +9,12 @@ if ( ! function_exists( 'eventbrite_get_events' ) ) :
 /**
  * Get an array of Eventbrite events, in the format expected by Eventbrite_Event
  *
- * @param  array $params Parameters for the user_owned_events endpoint to pass during the API call.
+ * @param  array $params Parameters for the user_events endpoint to pass during the API call.
  * @param  bool $force Force an API call, don't use cache.
  * @return object API results
  */
 function eventbrite_get_events( $params = array(), $force = false ) {
-	return eventbrite()->get_user_owned_events( $params, $force );
+	return eventbrite()->get_user_events( $params, $force );
 }
 endif;
 
@@ -64,8 +64,8 @@ function eventbrite_is_event( $post = null ) {
 		global $post;
 	}
 
-	// Check if the post is an Eventbrite_Event object.
-	if ( is_a( $post, 'Eventbrite_Event' ) ) {
+	// Check if the post is an Eventbrite_Event object and if it doesn't have a post type set
+	if ( is_a( $post, 'Eventbrite_Event' ) && empty( $post->post_type ) ) {
 		return true;
 	}
 
@@ -179,8 +179,8 @@ function eventbrite_event_meta() {
 					'class' => array(),
 				),
 			) ),
-			esc_url( get_author_posts_url( get_the_author_meta( 'ID' ) ) ),
-			esc_html( get_the_author() )
+			esc_url( get_author_posts_url( 0 ) ),
+			esc_html( eventbrite_event_organizer()->name )
 		);
 	}
 
@@ -354,13 +354,19 @@ if ( ! function_exists( 'eventbrite_venue_get_archive_link' ) ) :
  * @return string URL
  */
 function eventbrite_venue_get_archive_link() {
-	// Get the permalink of the current template page.
-	$url = get_permalink( get_queried_object_id() );
+	$url = "";
 
-	// If the event has a venue set, append it to the URL. http://(page permalink)/venue/(venue name)-(venue ID)/
-	if ( ! empty( eventbrite_event_venue()->name ) ) {
-		$url .= 'venue/' . sanitize_title( eventbrite_event_venue()->name ) . '-' . absint( eventbrite_event_venue()->id );
+	if( !empty( eventbrite_event_venue()->id ) ){
+		// Get the permalink of the current template page.
+		$url = get_permalink( get_queried_object_id() );
+
+		// If the event has a venue set, append it to the URL. http://(page permalink)/venue/(venue name)-(venue ID)/
+		if ( ! empty( eventbrite_event_venue()->name ) ) {
+			$url .= 'venue/' . sanitize_title( eventbrite_event_venue()->name ) . '-' . absint( eventbrite_event_venue()->id );
+		}
 	}
+
+	$url = apply_filters( 'eventbrite_venue_get_archive_link', $url );
 
 	return $url;
 }
@@ -386,6 +392,12 @@ function eventbrite_edit_post_link( $text = null, $before = '', $after = '' ) {
 			'ref' => 'wporgedit',
 		), 'https://eventbrite.com/edit' );
 
+
+	// If real post then return the post edit link
+	if( get_post_type() ){
+		$url = get_edit_post_link();
+	}
+
 	// Output the formatted link.
 	printf( '%s<a href="%s">%s</a>%s',
 		$before,
@@ -404,7 +416,7 @@ function eventbrite_ticket_form_widget() {
 	// Build the src attribute URL.
 	$src = add_query_arg( array(
 			'eid' => get_the_ID(),
-			'ref' => 'etckt',
+			'ref' => 'odwdwdwordpress',
 	), '//eventbrite.com/tickets-external' );
 
 	// Assemble our ticket info HTML.
@@ -441,9 +453,11 @@ function eventbrite_get_ticket_form_widget_height() {
 			// Add height for each ticket type.
 			$tickets_height += 85;
 			// Note if any ticket types are still available.
-			if ( 'AVAILABLE' === $ticket->on_sale_status ) {
+			if ( 'AVAILABLE' === $ticket->on_sale_status && !empty( $ticket->sales_end ) ) {
 				$sales_open = true;
-				$sales_end[] = $ticket->sales_end;
+				if( isset( $ticket->sales_end ) ){
+					$sales_end[] = $ticket->sales_end;
+				}
 			}
 		}
 
@@ -481,3 +495,36 @@ endif;
 function eventbrite_has_active_connection() {
 	return ( Eventbrite_Requirements::has_active_connection() );
 }
+
+if ( ! function_exists( 'eventbrite_show_calendar' ) ) :
+	/**
+	 * Display calendar with events in html format
+	 * @param  array $query Query to use for event search
+	 */
+	function eventbrite_show_calendar( $query ){
+		$calendar = new Eventrite_Calendar();
+		$calendar->display_calendar( $query );
+	}
+endif;
+
+if ( ! function_exists( 'eventbrite_get_setting' ) ) :
+	/**
+	 * Get an Eventbrite API administration setting
+	 * @param  string $key The key of the option
+	 * @return mixed       The value of the setting
+	 */
+	function eventbrite_get_setting( $key ){
+		return get_option( 'eb_settings_' . $key );
+	}
+endif;
+
+if ( ! function_exists( 'eventbrite_set_setting' ) ) :
+	/**
+	 * Save an Eventbrite API administration setting
+	 * @param  string $key The key of the option
+	 * @param  mixed       The value of the setting
+	 */
+	function eventbrite_set_setting( $key, $value ){
+		return update_option( 'eb_settings_' . $key, $value );
+	}
+endif;

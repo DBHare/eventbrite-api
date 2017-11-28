@@ -64,9 +64,12 @@ class Eventbrite_API extends Keyring_Service_Eventbrite {
 		if ( empty( $token ) )
 			return;
 
-		$this->set_endpoint( 'user_owned_events', self::API_BASE . 'users/' . $this->eventbrite_external_id . '/owned_events', 'GET' );
+		$this->set_endpoint( 'user_events', self::API_BASE . 'users/' . $this->eventbrite_external_id . '/events', 'GET' );
 		$this->set_endpoint( 'event_details', self::API_BASE . 'events/', 'GET' );
-		$this->set_endpoint( 'event_search', self::API_BASE . 'events/search/', 'GET' );
+		$this->set_endpoint( 'event_search', self::API_BASE . 'organizers/:organizer_id/events/', 'GET' );
+		$this->set_endpoint( 'get_webhooks', self::API_BASE . 'webhooks/', 'GET' );
+		$this->set_endpoint( 'create_webhook', self::API_BASE . 'webhooks/', 'POST' );
+		$this->set_endpoint( 'remove_webhook', self::API_BASE . 'webhooks/', 'DELETE' );
 	}
 
 	/**
@@ -85,9 +88,22 @@ class Eventbrite_API extends Keyring_Service_Eventbrite {
 			return new Keyring_Error( '400', 'No token present for the Eventbrite API.' );
 
 		$endpoint_url = trailingslashit( self::$instance->{$endpoint . '_url'} );
+
+		// Check for ids in endpoint_url's and replace them. Required for organizers.
+		preg_match( '/\:([a-z\_]+)\//', $endpoint_url, $matches );
+		if( !empty( $matches[1] )){
+			if( ! empty( $query_params[ $matches[1] ] ) ){
+				$endpoint_url = str_replace( ':' . $matches[1], $query_params[ $matches[1] ], $endpoint_url );
+				unset( $query_params[ $matches[1] ] );
+			}else{
+				return new WP_Error( '500', 'Parameter "' . $matches[1] . '" is missing.' );
+			}
+		}
+
 		$query_params['expand'] = apply_filters( 'eventbrite_api_expansions', 'logo,organizer,venue,ticket_classes,format,category,subcategory', $endpoint, $query_params, $object_id );
+
 		$method = self::$instance->{$endpoint . '_method'};
-		$params = array( 'method' => $method );
+		$params = array( 'method' => $method, 'timeout' => 30 );
 
 		if ( ! empty( $object_id ) && is_numeric( $object_id ) ) {
 			$endpoint_url = trailingslashit( $endpoint_url . absint( $object_id ) );
@@ -97,6 +113,8 @@ class Eventbrite_API extends Keyring_Service_Eventbrite {
 			$endpoint_url = add_query_arg( $query_params, $endpoint_url );
 		} else if ( 'POST' == $method ) {
 			$params['body'] = $query_params;
+		} else if ( 'DELETE' == $method ) {
+			$endpoint_url = $endpoint_url . '/' . $query_params['id'];
 		} else {
 			return new WP_Error( '500', 'Method ' . $method . ' is not implemented in the Eventbrite API.' );
 		}

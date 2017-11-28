@@ -27,3 +27,45 @@
 	color: #000;
 	font-weight: bold;
 }
+
+.eventbrite-event-calendar .clndr-previous-button, 
+.eventbrite-event-calendar .clndr-next-button {
+	margin-top: 0px;
+}
+
+.eventbrite-event img {
+	max-width:100%;
+}
+
+.eb-custom-event .eventbrite-join-btn-wrap {
+	text-align:center;
+}
+
+.eb-custom-event .eventbrite-join-btn {
+	padding: 11px 30px;
+    font-weight: normal;
+    color: #fff;
+    background-color: #00ab44;
+    text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
+    height: auto;
+    border: 0;
+    vertical-align: middle;
+    position: relative;
+    -webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;
+	transition:All 0.5s ease;
+    -webkit-transition:All 0.5s ease;
+    -moz-transition:All 0.5s ease;
+    -o-transition:All 0.5s ease;
+    font-size:14px;
+    font-family: Arial;
+    min-width:200px;
+    display:inline-block;
+}
+
+.eb-custom-event .eventbrite-join-btn:hover {
+    background-color: #00451b;
+}

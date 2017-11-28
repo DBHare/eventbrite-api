@@ -13,60 +13,76 @@ get_header(); ?>
 				</h1>
 			</header><!-- .page-header -->
 
-			<?php
-				// Set up and call our Eventbrite query.
-				$events = new Eventbrite_Query( apply_filters( 'eventbrite_query_args', array(
-					// 'display_private' => false, // boolean
-					// 'nopaging' => false,        // boolean
-					// 'limit' => null,            // integer
-					// 'organizer_id' => null,     // integer
-					// 'p' => null,                // integer
-					// 'post__not_in' => null,     // array of integers
-					// 'venue_id' => null,         // integer
-					// 'category_id' => null,      // integer
-					// 'subcategory_id' => null,   // integer
-					// 'format_id' => null,        // integer
-				) ) );
+			<?php 
+			// Set up and call our Eventbrite query.
+			$events = new Eventbrite_Query( $query = apply_filters( 'eventbrite_query_args', array(
+				// 'display_private' => false, // boolean
+				// 'nopaging' => false,        // boolean
+				// 'limit' => null,            // integer
+				// 'organizer_id' => null,     // integer
+				// 'p' => null,                // integer
+				// 'post__not_in' => null,     // array of integers
+				// 'venue_id' => null,         // integer
+				// 'category_id' => null,      // integer
+				// 'subcategory_id' => null,   // integer
+				// 'format_id' => null,        // integer
+				// 'order_by' => null,         // string
+				// 'start_date' => null,       // string
+				// 'end_date' => null,         // string
+				// 'status' => null            // string
+			) ) );
+			 ?>
+			
+			<div class="eventbrite-calendar-icons">
+                <a href="#" class="event-display-list active"> <i class="fa fa-list"></i></a>
+                <a href="#" class="event-display-calendar"><i class="fa fa-calendar-o"></i></a>
+            </div><!-- .calendar-icons -->  
 
-				if ( $events->have_posts() ) :
-					while ( $events->have_posts() ) : $events->the_post(); ?>
+        	<article class="hentry eventbrite-event-calendar">
+                <?php eventbrite_show_calendar( $query ); ?>
+            </article>
+			
+			<div class="eventbrite-event-list">
+				<?php
+					if ( $events->have_posts() ) :
+						while ( $events->have_posts() ) : $events->the_post(); ?>
 
-						<article id="event-<?php the_ID(); ?>" <?php post_class(); ?>>
-							<?php the_post_thumbnail(); ?>
+							<article id="event-<?php the_ID(); ?>" <?php post_class(); ?>>
+								<?php the_post_thumbnail( 'eventbrite-event' ); ?>
 
-							<header class="entry-header">
+								<header class="entry-header">
 
-								<?php the_title( sprintf( '<h2 class="entry-title"><a href="%s" rel="bookmark">', esc_url( get_permalink() ) ), '</a></h2>' ); ?>
+									<?php the_title( sprintf( '<h2 class="entry-title"><a href="%s" rel="bookmark">', esc_url( get_permalink() ) ), '</a></h2>' ); ?>
 
-								<div class="entry-meta">
-									<?php eventbrite_event_meta(); ?>
-								</div><!-- .entry-meta -->
-							</header><!-- .entry-header -->
+									<div class="entry-meta">
+										<?php eventbrite_event_meta( 'eventbrite-event' ); ?>
+									</div><!-- .entry-meta -->
+								</header><!-- .entry-header -->
 
-							<div class="entry-content">
-								<?php eventbrite_ticket_form_widget(); ?>
-							</div><!-- .entry-content -->
+								<div class="entry-content">
+									<?php eventbrite_ticket_form_widget(); ?>
+								</div><!-- .entry-content -->
 
-							<footer class="entry-footer">
-								<?php eventbrite_edit_post_link( __( 'Edit', 'eventbrite_api' ), '<span class="edit-link">', '</span>' ); ?>
-							</footer><!-- .entry-footer -->
-						</article><!-- #post-## -->
+								<footer class="entry-footer">
+									<?php eventbrite_edit_post_link( __( 'Edit', 'eventbrite_api' ), '<span class="edit-link">', '</span>' ); ?>
+								</footer><!-- .entry-footer -->
+							</article><!-- #post-## -->
 
-					<?php endwhile;
+						<?php endwhile;
 
-					// Previous/next post navigation.
-					eventbrite_paging_nav( $events );
+						// Previous/next post navigation.
+						eventbrite_paging_nav( $events );
 
-				else :
-					// If no content, include the "No posts found" template.
-					get_template_part( 'content', 'none' );
+					else :
+						// If no content, include the "No posts found" template.
+						get_template_part( 'content', 'none' );
 
-				endif;
+					endif;
 
-				// Return $post to its rightful owner.
-				wp_reset_postdata();
-			?>
-
+					// Return $post to its rightful owner.
+					wp_reset_postdata();
+				?>
+			</div>
 		</main><!-- #main -->
 	</section><!-- #primary -->
 

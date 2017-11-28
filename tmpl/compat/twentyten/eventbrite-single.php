@@ -20,6 +20,11 @@ get_header(); ?>
 								<div class="entry-meta">
 									<?php eventbrite_event_meta(); ?>
 								</div><!-- .entry-meta -->
+								
+								<div class="post-thumbnail">
+									<?php the_post_thumbnail(); ?>
+								</div>
+								
 
 								<div class="entry-content">
 									<?php the_content(); ?>
