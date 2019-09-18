@@ -1,3 +1,5 @@
+See readme.txt
+
 # Eventbrite API WordPress Plugin
 
 The Eventbrite API plugin brings the power of Eventbrite to WordPress, for both users and developers.
